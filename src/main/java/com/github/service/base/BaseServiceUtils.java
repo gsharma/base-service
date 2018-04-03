@@ -31,6 +31,11 @@ import io.netty.handler.codec.http.QueryStringDecoder;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 
+/**
+ * 
+ * 
+ * @author gaurav
+ */
 final class BaseServiceUtils {
   public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
@@ -38,7 +43,7 @@ final class BaseServiceUtils {
   private static final OkHttpClient httpClient =
       new OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).build();
 
-  public static Response post(final URL url, final MediaType mediaType, final String body)
+  static Response post(final URL url, final MediaType mediaType, final String body)
       throws IOException {
     RequestBody requestBody = RequestBody.create(mediaType, body);
     Request request = new Request.Builder().url(url).post(requestBody).build();
@@ -46,13 +51,13 @@ final class BaseServiceUtils {
     return response;
   }
 
-  public static Response get(final URL url) throws IOException {
+  static Response get(final URL url) throws IOException {
     Request request = new Request.Builder().url(url).get().build();
     Response response = httpClient.newCall(request).execute();
     return response;
   }
 
-  public static void logRequestDetails(final Logger logger, final ChannelHandlerContext context,
+  static void logRequestDetails(final Logger logger, final ChannelHandlerContext context,
       final FullHttpRequest request) {
     // 1. parse uri and method
     SocketAddress localAddress = context.pipeline().channel().localAddress();
@@ -78,8 +83,9 @@ final class BaseServiceUtils {
     logger.info(String.format("Cookies: %s", cookies));
   }
 
-  public static void channelResponseWrite(ChannelHandlerContext channelHandlerContext,
-      FullHttpRequest fullHttpRequest, FullHttpResponse response, ChannelPromise promise) {
+  static void channelResponseWrite(final ChannelHandlerContext channelHandlerContext,
+      final FullHttpRequest fullHttpRequest, final FullHttpResponse response,
+      final ChannelPromise promise) {
     final boolean keepAlive = HttpUtil.isKeepAlive(fullHttpRequest);
     if (keepAlive) {
       response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
@@ -90,7 +96,7 @@ final class BaseServiceUtils {
     }
   }
 
-  public static final Function<FullHttpRequest, String> stateDecoder =
+  static final Function<FullHttpRequest, String> stateDecoder =
       new Function<FullHttpRequest, String>() {
         @Override
         public String apply(final FullHttpRequest request) {
@@ -103,7 +109,7 @@ final class BaseServiceUtils {
         }
       };
 
-  public static final Function<FullHttpRequest, String> accessTokenDecoder =
+  static final Function<FullHttpRequest, String> accessTokenDecoder =
       new Function<FullHttpRequest, String>() {
         @Override
         public String apply(final FullHttpRequest request) {

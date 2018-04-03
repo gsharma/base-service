@@ -23,6 +23,8 @@ import io.netty.util.CharsetUtil;
 
 /**
  * Handle all uncaught exceptions
+ * 
+ * @author gaurav
  */
 public class PipelineExceptionHandler extends ChannelDuplexHandler {
   private static final Logger logger =

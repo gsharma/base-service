@@ -21,6 +21,8 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * This is a sample request handler where we want to write business logic.
+ * 
+ * @author gaurav
  */
 public final class ServiceHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
   private static final Logger logger = LogManager.getLogger(ServiceHandler.class.getSimpleName());
@@ -43,7 +45,8 @@ public final class ServiceHandler extends SimpleChannelInboundHandler<FullHttpRe
     final HttpMethod method = request.method();
     final String body = request.content() != null ? request.content().toString() : "";
     final String uri = request.uri();
-    // logger.info(String.format("Blocking %s %s", method.name(), uri));
+    BaseServiceUtils.logRequestDetails(logger, context, request);
+
     final FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
         HttpResponseStatus.OK, Unpooled.copiedBuffer("Echo" + body, CharsetUtil.UTF_8));
     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");

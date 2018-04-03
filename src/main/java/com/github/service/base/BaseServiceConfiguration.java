@@ -1,5 +1,12 @@
 package com.github.service.base;
 
+/**
+ * An immutable config holder for the server to bootstrap.
+ * 
+ * TODO: provide a way to populate via properties, as well
+ * 
+ * @author gaurav
+ */
 public final class BaseServiceConfiguration {
   private final int serverPort;
   private final int serverThreadCount;

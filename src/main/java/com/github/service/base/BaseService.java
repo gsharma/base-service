@@ -8,6 +8,8 @@ public interface BaseService {
 
   /**
    * A simple builder to let users use fluent APIs to build BaseService.
+   * 
+   * @author gaurav
    */
   public final static class BaseServiceBuilder {
     private BaseServiceConfiguration config;

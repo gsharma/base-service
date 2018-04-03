@@ -26,6 +26,8 @@ import io.netty.handler.timeout.IdleStateHandler;
 
 /**
  * This is the entry point to bootstrapping and configuring the base service.
+ * 
+ * @author gaurav
  */
 final class BaseServiceImpl implements BaseService {
   private static final Logger logger = LogManager.getLogger(BaseServiceImpl.class.getSimpleName());
