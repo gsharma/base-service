@@ -57,7 +57,7 @@ final class BaseServiceImpl implements BaseService {
       @Override
       public Thread newThread(final Runnable runnable) {
         Thread thread = new Thread(runnable);
-        thread.setName("rp-server-" + threadCounter.getAndIncrement());
+        thread.setName("server-" + threadCounter.getAndIncrement());
         thread.setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
           @Override
           public void uncaughtException(Thread thread, Throwable error) {
@@ -73,7 +73,7 @@ final class BaseServiceImpl implements BaseService {
       @Override
       public Thread newThread(final Runnable runnable) {
         Thread thread = new Thread(runnable);
-        thread.setName("rp-worker-" + threadCounter.getAndIncrement());
+        thread.setName("worker-" + threadCounter.getAndIncrement());
         thread.setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
           @Override
           public void uncaughtException(Thread thread, Throwable error) {
