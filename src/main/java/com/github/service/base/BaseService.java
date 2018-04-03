@@ -1,5 +1,10 @@
 package com.github.service.base;
 
+/**
+ * Base service lifecycle api.
+ * 
+ * @author gaurav
+ */
 public interface BaseService {
 
   void start() throws Exception;

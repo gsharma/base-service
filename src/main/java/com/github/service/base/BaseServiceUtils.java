@@ -32,7 +32,7 @@ import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 
 /**
- * 
+ * Base service utility functions.
  * 
  * @author gaurav
  */
@@ -115,7 +115,7 @@ final class BaseServiceUtils {
         public String apply(final FullHttpRequest request) {
           if (request.headers().contains(HttpHeaderNames.AUTHORIZATION)) {
             return request.headers().get(HttpHeaderNames.AUTHORIZATION);
-          } else if (request.headers().contains("auth-token")) { // TODO:ProxyHeaderNames Enum
+          } else if (request.headers().contains("auth-token")) {
             return request.headers().get("auth-token");
           }
           return new String();
