@@ -25,12 +25,12 @@
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>
       <artifactId>okhttp</artifactId>
-      <version>3.9.0</version>
+      <version>3.10.0</version>
     </dependency>
     <dependency>
       <groupId>com.squareup.okio</groupId>
       <artifactId>okio</artifactId>
-      <version>1.13.0</version>
+      <version>1.14.0</version>
     </dependency>
 
     <dependency>
@@ -49,22 +49,17 @@
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-transport</artifactId>
-      <version>4.1.15.Final</version>
+      <version>4.1.23.Final</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-handler</artifactId>
-      <version>4.1.15.Final</version>
+      <version>4.1.23.Final</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-codec-http</artifactId>
-      <version>4.1.15.Final</version>
-    </dependency>
-    <dependency>
-      <groupId>io.netty</groupId>
-      <artifactId>netty-codec-http</artifactId>
-      <version>4.1.15.Final</version>
+      <version>4.1.23.Final</version>
     </dependency>
 
     <dependency>
