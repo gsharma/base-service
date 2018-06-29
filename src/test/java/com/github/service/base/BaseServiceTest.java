@@ -1,8 +1,9 @@
 package com.github.service.base;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
@@ -10,9 +11,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.service.base.BaseService.BaseServiceBuilder;
 
 import okhttp3.HttpUrl;
@@ -42,23 +43,27 @@ public class BaseServiceTest {
       new OkHttpClient.Builder().readTimeout(10, TimeUnit.MINUTES).build(); // for debugging
   // private static final String serverUrl = "http://localhost:" + config.getServerPort();
   private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
   public void testServer() throws Exception {
-    final HttpUrl url =
-        new HttpUrl.Builder().scheme("http").host("localhost").port(config.getServerPort()).build();
-    // .addPathSegment("org").addQueryParameter("code", "code")
-    // .addQueryParameter("state", "state").build();
-    Request request = new Request.Builder().url(url).build();
+    final HttpUrl url = new HttpUrl.Builder().scheme("http").host("localhost")
+        .addPathSegment("service").addPathSegment("base").port(config.getServerPort()).build();
+    BaseRequest baseRequest = new BaseRequest();
+    baseRequest.setRequestId(Math.random());
+    baseRequest.setClientTstampMillis(System.currentTimeMillis());
+    String requestJson = objectMapper.writeValueAsString(baseRequest);
+    RequestBody body = RequestBody.create(JSON, requestJson);
+    Request request = new Request.Builder().url(url).post(body).build();
     Response response = client.newCall(request).execute();
     assertEquals(200, response.code());
 
-    String json = "{\"hello\" : \"world\"}";
-    RequestBody body = RequestBody.create(JSON, json);
-    request = new Request.Builder().url(url).post(body).build();
+    request = new Request.Builder().url(url).get().build();
     response = client.newCall(request).execute();
     assertEquals(200, response.code());
-    logger.info(response);
+    BaseResponse baseResponse = objectMapper.readValue(response.body().bytes(), BaseResponse.class);
+    assertNotNull(baseResponse);
+    assertTrue(baseResponse.getServerTstampMillis() != 0);
   }
 
   @BeforeClass
