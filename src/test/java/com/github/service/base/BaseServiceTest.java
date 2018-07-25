@@ -16,6 +16,8 @@ import org.junit.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.service.base.BaseService.BaseServiceBuilder;
 
+import io.netty.handler.codec.http.HttpHeaderNames;
+import okhttp3.ConnectionPool;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -37,33 +39,59 @@ public class BaseServiceTest {
   // serverPort, serverThreadCount, workerThreadCount, readerIdleTimeSeconds, writerIdleTimeSeconds,
   // compressionLevel
   private static BaseServiceConfiguration config =
-      new BaseServiceConfiguration(9000, 2, Runtime.getRuntime().availableProcessors(), 60, 60, 9);
+      new BaseServiceConfiguration(9000, 2, Runtime.getRuntime().availableProcessors(), 15, 15, 9);
   private static BaseService service = BaseServiceBuilder.newBuilder().config(config).build();
   private static OkHttpClient client =
-      new OkHttpClient.Builder().readTimeout(10, TimeUnit.MINUTES).build(); // for debugging
+      new OkHttpClient.Builder().connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES))
+          .readTimeout(10, TimeUnit.MINUTES).build(); // for debugging
   // private static final String serverUrl = "http://localhost:" + config.getServerPort();
   private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
   public void testServer() throws Exception {
-    final HttpUrl url = new HttpUrl.Builder().scheme("http").host("localhost")
-        .addPathSegment("service").addPathSegment("base").port(config.getServerPort()).build();
-    BaseRequest baseRequest = new BaseRequest();
-    baseRequest.setRequestId(Math.random());
-    baseRequest.setClientTstampMillis(System.currentTimeMillis());
-    String requestJson = objectMapper.writeValueAsString(baseRequest);
-    RequestBody body = RequestBody.create(JSON, requestJson);
-    Request request = new Request.Builder().url(url).post(body).build();
-    Response response = client.newCall(request).execute();
-    assertEquals(200, response.code());
+    final Runnable work = new Runnable() {
+      public void run() {
+        try {
+          final HttpUrl url =
+              new HttpUrl.Builder().scheme("http").host("localhost").addPathSegment("service")
+                  .addPathSegment("base").port(config.getServerPort()).build();
+          BaseRequest baseRequest = new BaseRequest();
+          baseRequest.setRequestId(Math.random());
+          baseRequest.setClientTstampMillis(System.currentTimeMillis());
+          String requestJson = objectMapper.writeValueAsString(baseRequest);
+          RequestBody body = RequestBody.create(JSON, requestJson);
+          Request request = new Request.Builder().url(url)
+              .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
+              // .header(HttpHeaderNames.CONNECTION.toString(), "close")
+              .header(HttpHeaderNames.ORIGIN.toString(), "localhost").post(body).build();
+          Response response = client.newCall(request).execute();
+          assertEquals(200, response.code());
 
-    request = new Request.Builder().url(url).get().build();
-    response = client.newCall(request).execute();
-    assertEquals(200, response.code());
-    BaseResponse baseResponse = objectMapper.readValue(response.body().bytes(), BaseResponse.class);
-    assertNotNull(baseResponse);
-    assertTrue(baseResponse.getServerTstampMillis() != 0);
+          request = new Request.Builder().url(url)
+              .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
+              .header("Origin", "localhost").get().build();
+          response = client.newCall(request).execute();
+          assertEquals(200, response.code());
+          BaseResponse baseResponse =
+              objectMapper.readValue(response.body().bytes(), BaseResponse.class);
+          assertNotNull(baseResponse);
+          assertTrue(baseResponse.getServerTstampMillis() != 0);
+        } catch (Exception fooBar) {
+          logger.error(fooBar);
+        }
+      }
+    };
+    int workerCount = 100;
+    Thread[] workers = new Thread[workerCount];
+    for (int iter = 0; iter < workerCount; iter++) {
+      Thread worker = new Thread(work);
+      workers[iter] = worker;
+      worker.start();
+    }
+    for (Thread worker : workers) {
+      worker.join();
+    }
   }
 
   @BeforeClass

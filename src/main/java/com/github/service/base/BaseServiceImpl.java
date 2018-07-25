@@ -4,12 +4,15 @@ import com.github.service.base.BaseServiceConfiguration;
 
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -18,11 +21,17 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpContentCompressor;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http.cors.CorsConfig;
+import io.netty.handler.codec.http.cors.CorsConfigBuilder;
+import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 
 /**
  * This is the entry point to bootstrapping and configuring the base service.
@@ -36,6 +45,9 @@ final class BaseServiceImpl implements BaseService {
   private Channel httpChannel;
   private EventLoopGroup serverThreads;
   private EventLoopGroup workerThreads;
+
+  private static final AtomicInteger currentActiveConnectionCount = new AtomicInteger();
+  private static final AtomicLong allAcceptedConnectionCount = new AtomicLong();
 
   BaseServiceImpl(final BaseServiceConfiguration config) {
     this.config = config;
@@ -53,6 +65,7 @@ final class BaseServiceImpl implements BaseService {
             port, serverThreadCount, workerThreadCount));
 
     // Configure the server:worker system
+    // TODO: try and use EpollEventLoopGroup
     serverThreads = new NioEventLoopGroup(serverThreadCount, new ThreadFactory() {
       final AtomicInteger threadCounter = new AtomicInteger();
 
@@ -86,12 +99,18 @@ final class BaseServiceImpl implements BaseService {
       }
     });
 
+    // InternalLoggerFactory.setDefaultFactory(Log4JLoggerFactory.INSTANCE);
+
+    // TODO: get read/write timeout values from BaseServiceConfiguration
     final ServerBootstrap bootstrap = new ServerBootstrap();
     bootstrap.group(serverThreads, workerThreads).channel(NioServerSocketChannel.class)
         .handler(new LoggingHandler(LogLevel.INFO))
         .childHandler(new BaseServiceInitializer(config));
     bootstrap.childOption(ChannelOption.TCP_NODELAY, true);
     bootstrap.childOption(ChannelOption.SO_KEEPALIVE, true);
+    bootstrap.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
+    // TODO get this from BaseServiceConfiguration
+    bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 15000);
 
     httpChannel = bootstrap.bind(port).sync().channel();
     logger.info("Successfully fired up BaseService");
@@ -99,12 +118,19 @@ final class BaseServiceImpl implements BaseService {
 
   @Override
   public void stop() throws Exception {
+    logger.info(String.format("Current Active Connections:%d, All Accepted Connections:%d",
+        currentActiveConnectionCount.get(), allAcceptedConnectionCount.get()));
+
     logger.info("Shutting down BaseService");
     if (httpChannel != null) {
       httpChannel.close();
     }
-    serverThreads.shutdownGracefully();
-    workerThreads.shutdownGracefully();
+    if (serverThreads != null) {
+      serverThreads.shutdownGracefully();
+    }
+    if (workerThreads != null) {
+      workerThreads.shutdownGracefully();
+    }
     if (httpChannel != null) {
       httpChannel.closeFuture().await();
     }
@@ -142,24 +168,40 @@ final class BaseServiceImpl implements BaseService {
        * operation such as SocketChannel.write(ByteBuffer).
        * 
        * Inbound eval order: 0->1->2->3->4->5 <br/>
-       * Outbound eval order: 5->3->1->0 <br/>
+       * Outbound eval order: 6->5->3->1->0 <br/>
        * 
        * 3. Our chosen handler contract leverages FullHttpRequest flowing through the entire
        * pipeline.
        */
+      final ConnectionMetricHandler connectionMetricHandler =
+          new ConnectionMetricHandler(currentActiveConnectionCount, allAcceptedConnectionCount);
       pipeline.addLast("0", new IdleStateHandler(config.getReaderIdleTimeSeconds(),
-          config.getWriterIdleTimeSeconds(), 0));
-      pipeline.addLast("1", new HttpServerCodec());
-      // pipeline.addLast(new HttpRequestDecoder());
-      pipeline.addLast("2", new HttpObjectAggregator(65535));
-      // pipeline.addLast(new HttpResponseEncoder());
-      pipeline.addLast("3", new HttpContentCompressor(config.getCompressionLevel()));
+          config.getWriterIdleTimeSeconds(), 30));
+      pipeline.addLast("1", connectionMetricHandler);
+      pipeline.addLast("2", new HttpServerCodec(4096, 8192, 8192));
+      pipeline.addLast("3", new HttpObjectAggregator(65535));
+      pipeline.addLast("4", new HttpContentCompressor(config.getCompressionLevel()));
+
+      pipeline.addLast("5", new ReadTimeoutHandler(15000L, TimeUnit.MILLISECONDS));
+      pipeline.addLast("6", new WriteTimeoutHandler(15000L, TimeUnit.MILLISECONDS));
 
       // Add service handler(s) here
-      pipeline.addLast("4", new ServiceHandler());
+      pipeline.addLast("7", new ServiceHandler());
 
-      pipeline.addLast("5", new PipelineExceptionHandler());
+      pipeline.addLast("8", new PipelineExceptionHandler());
+
+      final CorsConfig corsConfig = CorsConfigBuilder.forAnyOrigin()
+          .allowedRequestMethods(new HttpMethod[] {HttpMethod.GET, HttpMethod.POST}).build();
+      pipeline.addLast("9", new CorsHandler(corsConfig));
     }
+  }
+
+  public static void main(String[] args) {
+    Thread.currentThread().setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
+      public void uncaughtException(Thread t, Throwable e) {
+        e.printStackTrace();
+      }
+    });
   }
 
 }

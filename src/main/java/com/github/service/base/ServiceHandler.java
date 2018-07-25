@@ -7,7 +7,6 @@ import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
@@ -43,8 +42,11 @@ public final class ServiceHandler extends SimpleChannelInboundHandler<FullHttpRe
     }
 
     BaseServiceUtils.logRequestDetails(logger, context, request);
+
+    // TODO: better handling of Supported methods, uri, content-types
     final HttpMethod method = request.method();
     final String uri = request.uri().trim();
+    final String contentType = request.headers().get("Content-Type");
 
     final ByteBuf content = request.content();
     final String body = content != null ? content.toString(StandardCharsets.UTF_8) : "";
@@ -77,16 +79,16 @@ public final class ServiceHandler extends SimpleChannelInboundHandler<FullHttpRe
     }
 
     if (response == null) {
-      response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+      response =
+          new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.METHOD_NOT_ALLOWED);
     }
 
     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-    response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+    response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
 
     // CORS Headers, if needed - tweak here or use CorsHandler
-    response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-    response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST");
+    // response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+    // response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST");
 
     BaseServiceUtils.channelResponseWrite(context, request, response, context.voidPromise());
   }

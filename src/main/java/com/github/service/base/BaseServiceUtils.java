@@ -59,20 +59,22 @@ final class BaseServiceUtils {
 
   static void logRequestDetails(final Logger logger, final ChannelHandlerContext context,
       final FullHttpRequest request) {
+    StringBuilder details = new StringBuilder();
+
     // 1. parse uri and method
     SocketAddress localAddress = context.pipeline().channel().localAddress();
     final HttpMethod method = request.method();
     final String uri = request.uri();
-    logger.info(method.name() + ' ' + localAddress + uri);
+    details.append(method.name() + ' ' + localAddress + uri);
 
     // 2. parse request headers
     final HttpHeaders requestHeaders = request.headers();
-    logger.info(String.format("Request-Headers: %s", requestHeaders.entries()));
+    details.append(String.format(" Request-Headers: %s", requestHeaders.entries()));
 
     // 3. parse query params
     final QueryStringDecoder queryStringDecoder = new QueryStringDecoder(request.uri());
     final Map<String, List<String>> queryParams = queryStringDecoder.parameters();
-    logger.info(String.format("Query-Params: %s", queryParams));
+    details.append(String.format(" Query-Params: %s", queryParams));
 
     // 4. read cookies
     final String cookieString = request.headers().get(HttpHeaderNames.COOKIE);
@@ -80,7 +82,9 @@ final class BaseServiceUtils {
     if (cookieString != null) {
       cookies = ServerCookieDecoder.STRICT.decode(cookieString);
     }
-    logger.info(String.format("Cookies: %s", cookies));
+    details.append(String.format(" Cookies: %s", cookies));
+
+    logger.info(details.toString());
   }
 
   static void channelResponseWrite(final ChannelHandlerContext channelHandlerContext,
@@ -88,26 +92,12 @@ final class BaseServiceUtils {
       final ChannelPromise promise) {
     final boolean keepAlive = HttpUtil.isKeepAlive(fullHttpRequest);
     if (keepAlive) {
-      response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
       response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
-      channelHandlerContext.write(response, promise);
+      channelHandlerContext.writeAndFlush(response, promise);
     } else {
-      channelHandlerContext.write(response).addListener(ChannelFutureListener.CLOSE);
+      channelHandlerContext.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
   }
-
-  static final Function<FullHttpRequest, String> stateDecoder =
-      new Function<FullHttpRequest, String>() {
-        @Override
-        public String apply(final FullHttpRequest request) {
-          QueryStringDecoder decoder = new QueryStringDecoder(request.uri(), true);
-          String state = new String();
-          if (decoder.parameters().containsKey("state")) {
-            state = decoder.parameters().get("state").get(0);
-          }
-          return state;
-        }
-      };
 
   static final Function<FullHttpRequest, String> accessTokenDecoder =
       new Function<FullHttpRequest, String>() {
