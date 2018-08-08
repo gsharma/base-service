@@ -19,6 +19,7 @@ import com.github.service.base.BaseService.BaseServiceBuilder;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import okhttp3.ConnectionPool;
 import okhttp3.HttpUrl;
+import okhttp3.Interceptor;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -41,9 +42,10 @@ public class BaseServiceTest {
   private static BaseServiceConfiguration config =
       new BaseServiceConfiguration(9000, 2, Runtime.getRuntime().availableProcessors(), 15, 15, 9);
   private static BaseService service = BaseServiceBuilder.newBuilder().config(config).build();
+  // 10mins read timeout is for debugging
   private static OkHttpClient client =
       new OkHttpClient.Builder().connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES))
-          .readTimeout(10, TimeUnit.MINUTES).build(); // for debugging
+          .addInterceptor(new LoggingInterceptor()).readTimeout(10, TimeUnit.MINUTES).build();
   // private static final String serverUrl = "http://localhost:" + config.getServerPort();
   private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
   private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -82,10 +84,10 @@ public class BaseServiceTest {
         }
       }
     };
-    int workerCount = 100;
+    int workerCount = 40;
     Thread[] workers = new Thread[workerCount];
     for (int iter = 0; iter < workerCount; iter++) {
-      Thread worker = new Thread(work);
+      Thread worker = new Thread(work, "client-" + iter);
       workers[iter] = worker;
       worker.start();
     }
@@ -110,6 +112,21 @@ public class BaseServiceTest {
     // client.cache().close();
     if (service != null) {
       service.stop();
+    }
+  }
+
+  static final class LoggingInterceptor implements Interceptor {
+    @Override
+    public Response intercept(Interceptor.Chain chain) throws IOException {
+      Request request = chain.request();
+      long t1 = System.nanoTime();
+      logger.info(String.format("Sending request %s on %s%n%s", request.url(), chain.connection(),
+          request.headers()));
+      Response response = chain.proceed(request);
+      long t2 = System.nanoTime();
+      logger.info(String.format("Received response for %s in %.1fms%n%s", response.request().url(),
+          (t2 - t1) / 1e6d, response.headers()));
+      return response;
     }
   }
 

@@ -108,6 +108,7 @@ final class BaseServiceImpl implements BaseService {
         .childHandler(new BaseServiceInitializer(config));
     bootstrap.childOption(ChannelOption.TCP_NODELAY, true);
     bootstrap.childOption(ChannelOption.SO_KEEPALIVE, true);
+    bootstrap.childOption(ChannelOption.SO_BACKLOG, 1024);
     bootstrap.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
     // TODO get this from BaseServiceConfiguration
     bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 15000);
