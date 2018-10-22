@@ -14,6 +14,17 @@
     <github.repo.name>base-service</github.repo.name>
   </properties>
 
+  <repositories>
+    <repository>
+      <id>state-machine-mvn-repo</id>
+      <url>https://raw.githubusercontent.com/gsharma/state-machine/mvn-repo/</url>
+      <snapshots>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+      </snapshots>
+    </repository>
+  </repositories>
+
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
@@ -50,6 +61,12 @@
       <artifactId>log4j-core</artifactId>
       <version>2.11.1</version>
       <type>jar</type>
+    </dependency>
+
+    <dependency>
+      <groupId>com.github.statemachine</groupId>
+      <artifactId>statemachine</artifactId>
+      <version>1.0-SNAPSHOT</version>
     </dependency>
 
     <dependency>

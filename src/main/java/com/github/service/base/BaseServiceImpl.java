@@ -1,8 +1,20 @@
 package com.github.service.base;
 
 import com.github.service.base.BaseServiceConfiguration;
+import com.github.statemachine.FlowMode;
+import com.github.statemachine.RewindMode;
+import com.github.statemachine.State;
+import com.github.statemachine.StateMachine;
+import com.github.statemachine.StateMachineConfiguration;
+import com.github.statemachine.StateMachine.StateMachineBuilder;
+import com.github.statemachine.StateMachineConfiguration.StateMachineConfigurationBuilder;
+import com.github.statemachine.StateMachineException;
+import com.github.statemachine.StateMachineImpl;
+import com.github.statemachine.TransitionFunctor;
+import com.github.statemachine.TransitionResult;
 
 import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.Optional;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +53,7 @@ import io.netty.handler.timeout.WriteTimeoutHandler;
 final class BaseServiceImpl implements BaseService {
   private static final Logger logger = LogManager.getLogger(BaseServiceImpl.class.getSimpleName());
 
+  private StateMachine fsm;
   private final BaseServiceConfiguration config;
   private Channel httpChannel;
   private EventLoopGroup serverThreads;
@@ -51,10 +64,27 @@ final class BaseServiceImpl implements BaseService {
 
   BaseServiceImpl(final BaseServiceConfiguration config) {
     this.config = config;
+
+    try {
+      TransitionStoppedStarting stoppedStarting = new TransitionStoppedStarting();
+      TransitionStartingRunning startingRunning = new TransitionStartingRunning();
+      TransitionRunningStopping runningStopping = new TransitionRunningStopping();
+      TransitionStoppingStopped stoppingStopped = new TransitionStoppingStopped();
+      final StateMachineConfiguration fsmConfig = StateMachineConfigurationBuilder.newBuilder()
+          .flowMode(FlowMode.MANUAL).rewindMode(RewindMode.ALL_THE_WAY_HARD_RESET)
+          .resetMachineToInitOnFailure(true).flowExpirationMillis(0).build();
+      fsm = StateMachineBuilder.newBuilder().config(fsmConfig).transitions().next(stoppedStarting)
+          .next(startingRunning).next(runningStopping).next(stoppingStopped).build();
+    } catch (StateMachineException fsmException) {
+      logger.error(fsmException);
+    }
   }
 
   @Override
   public void start() throws Exception {
+    String fsmFlowId = fsm.startFlow();
+    fsm.transitionTo(fsmFlowId, ServiceState.starting);
+
     // TODO: handle args
     int port = config.getServerPort();
     int serverThreadCount = config.getServerThreadCount();
@@ -114,11 +144,18 @@ final class BaseServiceImpl implements BaseService {
     bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 15000);
 
     httpChannel = bootstrap.bind(port).sync().channel();
+
+    fsm.transitionTo(fsmFlowId, ServiceState.running);
+    fsm.stopFlow(fsmFlowId);
     logger.info("Successfully fired up BaseService");
   }
 
   @Override
   public void stop() throws Exception {
+    String fsmFlowId = fsm.startFlow();
+    logger.info(fsm.readCurrentState(fsmFlowId));
+    fsm.transitionTo(fsmFlowId, ServiceState.stopping);
+
     logger.info(String.format("Current Active Connections:%d, All Accepted Connections:%d",
         currentActiveConnectionCount.get(), allAcceptedConnectionCount.get()));
 
@@ -134,6 +171,11 @@ final class BaseServiceImpl implements BaseService {
     }
     if (httpChannel != null) {
       httpChannel.closeFuture().await();
+    }
+    fsm.transitionTo(fsmFlowId, ServiceState.stopped);
+    fsm.stopFlow(fsmFlowId);
+    if (fsm != null && fsm.alive()) {
+      fsm.demolish();
     }
     logger.info("Successfully shut down BaseService");
   }
@@ -203,6 +245,88 @@ final class BaseServiceImpl implements BaseService {
         e.printStackTrace();
       }
     });
+  }
+
+  /**
+   * Cleanly tie service lifecycle to an fsm
+   */
+  public static final class ServiceState {
+    public static State stopped, starting, running, stopping, errored;
+    static {
+      try {
+        starting = new State(Optional.of("STARTING"));
+        running = new State(Optional.of("RUNNING"));
+        stopping = new State(Optional.of("STOPPING"));
+        errored = new State(Optional.of("ERRORED"));
+        stopped = StateMachineImpl.notStartedState;
+      } catch (StateMachineException exception) {
+        logger.error(exception);
+      }
+    }
+  }
+
+  public static class TransitionStoppedStarting extends TransitionFunctor {
+    public TransitionStoppedStarting() throws StateMachineException {
+      super(ServiceState.stopped, ServiceState.starting);
+    }
+
+    @Override
+    public TransitionResult progress() {
+      return new TransitionResult(true, null, null);
+    }
+
+    @Override
+    public TransitionResult regress() {
+      return new TransitionResult(true, null, null);
+    }
+  }
+
+  public static class TransitionStartingRunning extends TransitionFunctor {
+    public TransitionStartingRunning() throws StateMachineException {
+      super(ServiceState.starting, ServiceState.running);
+    }
+
+    @Override
+    public TransitionResult progress() {
+      return new TransitionResult(true, null, null);
+    }
+
+    @Override
+    public TransitionResult regress() {
+      return new TransitionResult(true, null, null);
+    }
+  }
+
+  public static class TransitionRunningStopping extends TransitionFunctor {
+    public TransitionRunningStopping() throws StateMachineException {
+      super(ServiceState.running, ServiceState.stopping);
+    }
+
+    @Override
+    public TransitionResult progress() {
+      return new TransitionResult(true, null, null);
+    }
+
+    @Override
+    public TransitionResult regress() {
+      return new TransitionResult(true, null, null);
+    }
+  }
+
+  public static class TransitionStoppingStopped extends TransitionFunctor {
+    public TransitionStoppingStopped() throws StateMachineException {
+      super(ServiceState.stopping, ServiceState.stopped);
+    }
+
+    @Override
+    public TransitionResult progress() {
+      return new TransitionResult(true, null, null);
+    }
+
+    @Override
+    public TransitionResult regress() {
+      return new TransitionResult(true, null, null);
+    }
   }
 
 }
